@@ -1,0 +1,1736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orbfall · Gravity Orb & String Sequencer</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <!-- Load Tailwind CSS for responsive utility classes alongside custom instrument styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0f12;
+      --panel: rgba(22, 25, 32, 0.80);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e6e8ec;
+      --muted: #7b8190;
+      --accent-guitar: #f4a261;
+      --accent-drum: #4ea8de;
+      --accent-space: #a78bfa;
+      --accent-replay: #56cfe1;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      background-color: var(--bg);
+    }
+
+    /* Minimal Top Floating Pill HUD */
+    .hud {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+      padding: 7px 14px;
+      max-width: 96vw;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      z-index: 10;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.52);
+    }
+
+    .hud button, .staff-controls button {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid transparent;
+      padding: 5px 11px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: all 0.16s ease;
+      white-space: nowrap;
+    }
+
+    .hud button:hover, .staff-controls button:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .hud button.active {
+      background: rgba(244, 162, 97, 0.18);
+      border-color: rgba(244, 162, 97, 0.5);
+      color: #ffd6a5;
+    }
+
+    /* Ambient Space FX Active State */
+    .hud button.space-active {
+      background: rgba(167, 139, 250, 0.20);
+      border-color: rgba(167, 139, 250, 0.58);
+      color: #ddd6fe;
+      box-shadow: 0 0 16px rgba(167, 139, 250, 0.25);
+    }
+
+    /* Minimal Segmented Scale Selector */
+    .scale-group {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 2px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .scale-group button {
+      padding: 4px 10px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .scale-group button.active {
+      background: rgba(244, 162, 97, 0.22);
+      border-color: rgba(244, 162, 97, 0.45);
+      color: #ffd6a5;
+    }
+
+    .divider {
+      width: 1px;
+      height: 16px;
+      background: var(--border);
+    }
+
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      padding: 0 4px;
+    }
+
+    .slider-wrap input[type="range"] {
+      width: 64px;
+      accent-color: var(--accent-guitar);
+      cursor: pointer;
+    }
+
+    .hint {
+      position: fixed;
+      top: 62px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+      pointer-events: none;
+      text-align: center;
+      white-space: nowrap;
+      max-width: 94vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      z-index: 5;
+    }
+
+    /* Sheet Music Dock Overlay Controls */
+    .staff-controls {
+      position: fixed;
+      bottom: 146px;
+      right: 46px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .staff-controls button {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      padding: 5px 12px;
+      color: var(--text);
+    }
+
+    .staff-controls button.replaying {
+      background: rgba(86, 207, 225, 0.22);
+      border-color: rgba(86, 207, 225, 0.65);
+      color: #a8f0fa;
+    }
+
+    .staff-controls button.exported {
+      background: rgba(244, 162, 97, 0.24);
+      border-color: rgba(244, 162, 97, 0.65);
+      color: #ffd6a5;
+    }
+
+    @media (max-width: 768px) {
+      .hint {
+        top: 98px;
+        font-size: 10px;
+      }
+      .staff-controls {
+        right: 16px;
+        bottom: 148px;
+        gap: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Minimal Top Floating Pill HUD -->
+  <div class="hud" role="toolbar" aria-label="Sequencer Controls">
+    <button id="playBtn" class="active">Pause</button>
+    <button id="emitterBtn" class="active">Auto-Drop</button>
+    <button id="spaceFxBtn" class="space-active" title="Toggle Lush Stereo Delay & Algorithmic Reverb">✦ Space FX</button>
+    <div class="divider"></div>
+    <div class="scale-group" id="scaleSelector" role="group" aria-label="Musical Scale">
+      <button data-scale="pentatonic" class="active">Pentatonic</button>
+      <button data-scale="dorian">Dorian</button>
+      <button data-scale="major">Major</button>
+    </div>
+    <div class="divider"></div>
+    <div class="slider-wrap">
+      <span>Gravity</span>
+      <input id="gravitySlider" type="range" min="180" max="680" step="20" value="380" aria-label="Gravity Strength" />
+    </div>
+    <div class="divider"></div>
+    <button id="spawnOrbBtn">+ Drop Orb</button>
+    <button id="clearOrbsBtn">Clear Orbs</button>
+    <button id="clearShapesBtn">Clear Shapes</button>
+  </div>
+
+  <!-- Minimal Interaction Hint -->
+  <div class="hint">
+    Click empty space to drop an orb • Click a lane to place/rotate angled shapes (Right-click or double-click to remove) • Drag to strum
+  </div>
+
+  <!-- Sheet Music Staff Controls Overlay -->
+  <div class="staff-controls">
+    <button id="replayStaffBtn">▶ Replay Melody</button>
+    <button id="exportMidiBtn">⬇ Export MIDI</button>
+    <button id="clearStaffBtn">Clear Sheet</button>
+  </div>
+
+  <!-- Interactive Stage & Sheet Music Canvas -->
+  <canvas id="stage"></canvas>
+
+  <script>
+    /**
+     * GRAVITY ORB & STRING SEQUENCER
+     * Single-file HTML5 Canvas + Web Audio API Interactive Instrument
+     * Features:
+     * - 6 Retunable Guitar Strings + 3 Drum Lanes (Hi-Hat, Snare, Kick)
+     * - 2D Gravity Orbs + Oriented Polygon Deflector Ricochets
+     * - Lush Stereo Ping-Pong Delay + Procedural 2.8s Convolver Reverb ("Space FX")
+     * - Live Sheet Music Staff Transcription + Melody Replay + Binary .mid Export
+     */
+
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+
+    let W = window.innerWidth;
+    let H = window.innerHeight;
+
+    // --- WEB AUDIO SYNTHESIZER + STEREO DELAY & ALGORITHMIC REVERB ---
+    let audioCtx = null;
+    let masterCompressor = null;
+    let dryBus = null;
+    let wetSendBus = null;
+    let wetMasterGain = null;
+    let spaceFxEnabled = true;
+
+    /**
+     * Generates a lush 2.8-second stereo impulse response buffer with
+     * early reflections and exponentially decaying stereo noise tail.
+     */
+    function createLushImpulseResponse(context, duration = 2.8, decay = 2.5) {
+      const sampleRate = context.sampleRate;
+      const length = Math.floor(sampleRate * duration);
+      const impulse = context.createBuffer(2, length, sampleRate);
+      const left = impulse.getChannelData(0);
+      const right = impulse.getChannelData(1);
+
+      for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+        // Exponential decay envelope with smooth 12ms attack to avoid clicks
+        const attackEnv = Math.min(1, t / 0.012);
+        const env = attackEnv * Math.pow(1 - i / length, decay);
+
+        // Decorrelated stereo noise with subtle early reflection modulation
+        const earlyBoost = t < 0.08 ? 1.25 * Math.cos(t * 140) : 1.0;
+        left[i] = (Math.random() * 2 - 1) * env * earlyBoost;
+        right[i] = (Math.random() * 2 - 1) * env * earlyBoost;
+      }
+      return impulse;
+    }
+
+    /**
+     * Initializes the Web Audio graph:
+     * - Master DynamicsCompressorNode to prevent clipping
+     * - Stereo Ping-Pong Delay network (L: 0.27s, R: 0.405s) with cross-feedback
+     *   and a warm low-pass damping filter at 2400 Hz
+     * - ConvolverNode loaded with the 2.8-second algorithmic stereo impulse response
+     */
+    function ensureAudio() {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+          // Master compressor to glue dry + ambient tails and prevent clipping
+          masterCompressor = audioCtx.createDynamicsCompressor();
+          masterCompressor.threshold.setValueAtTime(-14, audioCtx.currentTime);
+          masterCompressor.knee.setValueAtTime(18, audioCtx.currentTime);
+          masterCompressor.ratio.setValueAtTime(3.5, audioCtx.currentTime);
+          masterCompressor.attack.setValueAtTime(0.005, audioCtx.currentTime);
+          masterCompressor.release.setValueAtTime(0.22, audioCtx.currentTime);
+          masterCompressor.connect(audioCtx.destination);
+
+          // Dry bus -> Master Compressor
+          dryBus = audioCtx.createGain();
+          dryBus.gain.setValueAtTime(0.92, audioCtx.currentTime);
+          dryBus.connect(masterCompressor);
+
+          // Wet Input Send Bus & Wet Master Return Gain
+          wetSendBus = audioCtx.createGain();
+          wetSendBus.gain.setValueAtTime(1.0, audioCtx.currentTime);
+
+          wetMasterGain = audioCtx.createGain();
+          wetMasterGain.gain.setValueAtTime(spaceFxEnabled ? 0.58 : 0.0, audioCtx.currentTime);
+          wetMasterGain.connect(masterCompressor);
+
+          // --- 1. STEREO PING-PONG DELAY NETWORK ---
+          const delayL = audioCtx.createDelay(2.0);
+          const delayR = audioCtx.createDelay(2.0);
+          delayL.delayTime.setValueAtTime(0.27, audioCtx.currentTime);  // 270ms left tap
+          delayR.delayTime.setValueAtTime(0.405, audioCtx.currentTime); // 405ms dotted-ratio right tap
+
+          // Warm low-pass damping filter (~2400 Hz) inside the delay loop
+          const dampingFilter = audioCtx.createBiquadFilter();
+          dampingFilter.type = 'lowpass';
+          dampingFilter.frequency.setValueAtTime(2400, audioCtx.currentTime);
+          dampingFilter.Q.setValueAtTime(0.7, audioCtx.currentTime);
+
+          const fbLtoR = audioCtx.createGain();
+          const fbRtoL = audioCtx.createGain();
+          fbLtoR.gain.setValueAtTime(0.38, audioCtx.currentTime);
+          fbRtoL.gain.setValueAtTime(0.34, audioCtx.currentTime);
+
+          // Stereo Merger for Ping-Pong output
+          const merger = audioCtx.createChannelMerger(2);
+          const delayOutGain = audioCtx.createGain();
+          delayOutGain.gain.setValueAtTime(0.52, audioCtx.currentTime);
+
+          // Connect wetSendBus -> dampingFilter -> Left Delay -> Right Delay -> Cross-Feedback
+          wetSendBus.connect(dampingFilter);
+          dampingFilter.connect(delayL);
+
+          delayL.connect(fbLtoR);
+          fbLtoR.connect(delayR);
+
+          delayR.connect(fbRtoL);
+          fbRtoL.connect(dampingFilter);
+
+          // Pan delayL to Left (ch 0) and delayR to Right (ch 1)
+          delayL.connect(merger, 0, 0);
+          delayR.connect(merger, 0, 1);
+          merger.connect(delayOutGain);
+          delayOutGain.connect(wetMasterGain);
+
+          // --- 2. ALGORITHMIC STEREO REVERB (ConvolverNode) ---
+          const convolver = audioCtx.createConvolver();
+          convolver.buffer = createLushImpulseResponse(audioCtx, 2.8, 2.5);
+
+          // Pre-reverb high-cut for warm, velvety ambient bloom
+          const reverbTone = audioCtx.createBiquadFilter();
+          reverbTone.type = 'lowpass';
+          reverbTone.frequency.setValueAtTime(3400, audioCtx.currentTime);
+
+          const reverbOutGain = audioCtx.createGain();
+          reverbOutGain.gain.setValueAtTime(0.72, audioCtx.currentTime);
+
+          // Feed both direct wet send and ping-pong delay output into the lush reverb
+          wetSendBus.connect(reverbTone);
+          delayOutGain.connect(reverbTone);
+          reverbTone.connect(convolver);
+          convolver.connect(reverbOutGain);
+          reverbOutGain.connect(wetMasterGain);
+        }
+
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      } catch (err) {
+        console.warn('Web Audio initialization issue:', err);
+      }
+    }
+
+    /**
+     * Smoothly toggles the Space FX (Stereo Delay + Algorithmic Reverb) wet bus
+     */
+    function setSpaceFx(enabled) {
+      spaceFxEnabled = enabled;
+      if (audioCtx && wetMasterGain) {
+        const now = audioCtx.currentTime;
+        wetMasterGain.gain.cancelScheduledValues(now);
+        wetMasterGain.gain.setTargetAtTime(spaceFxEnabled ? 0.58 : 0.0, now, 0.06);
+      }
+    }
+
+    /**
+     * Synthesizes a warm plucked guitar string with velocity-sensitive filter envelope
+     * and stereo panning based on horizontal pluck position.
+     */
+    function playGuitarNote(freq, velocity = 1.0, panPos = 0.0) {
+      ensureAudio();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const vel = Math.min(1.3, Math.max(0.25, velocity));
+
+      const osc1 = audioCtx.createOscillator();
+      const osc2 = audioCtx.createOscillator();
+      const subOsc = audioCtx.createOscillator();
+      const filter = audioCtx.createBiquadFilter();
+      const gain = audioCtx.createGain();
+      const panner = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
+
+      osc1.type = 'triangle';
+      osc2.type = 'sawtooth';
+      subOsc.type = 'sine';
+
+      osc1.frequency.setValueAtTime(freq, now);
+      osc2.frequency.setValueAtTime(freq, now);
+      osc2.detune.setValueAtTime(4.2, now); // Subtle chorus warmth
+      subOsc.frequency.setValueAtTime(freq * 0.5, now);
+
+      const subGain = audioCtx.createGain();
+      subGain.gain.setValueAtTime(0.18, now);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(freq * (4.8 + vel * 2.6), now);
+      filter.frequency.exponentialRampToValueAtTime(freq * 1.25, now + 0.42);
+
+      // Extended release when Space FX is active
+      const decayTime = spaceFxEnabled ? 1.85 : 1.35;
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.22 * vel, now + 0.007);
+      gain.gain.exponentialRampToValueAtTime(0.0007, now + decayTime);
+
+      osc1.connect(filter);
+      osc2.connect(filter);
+      subOsc.connect(subGain);
+      subGain.connect(filter);
+      filter.connect(gain);
+
+      if (panner) {
+        panner.pan.setValueAtTime(Math.max(-0.75, Math.min(0.75, panPos)), now);
+        gain.connect(panner);
+        panner.connect(dryBus);
+        panner.connect(wetSendBus);
+      } else {
+        gain.connect(dryBus);
+        gain.connect(wetSendBus);
+      }
+
+      osc1.start(now);
+      osc2.start(now);
+      subOsc.start(now);
+      osc1.stop(now + decayTime + 0.05);
+      osc2.stop(now + decayTime + 0.05);
+      subOsc.stop(now + decayTime + 0.05);
+    }
+
+    /**
+     * Synthesizes Kick, Snare, and Hi-Hat percussion hits, routing a subtle
+     * ambient send from Snare and Hi-Hat into the Space FX bus.
+     */
+    function playDrum(type, velocity = 1.0) {
+      ensureAudio();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const vel = Math.min(1.3, Math.max(0.3, velocity));
+
+      if (type === 'kick') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(142, now);
+        osc.frequency.exponentialRampToValueAtTime(36, now + 0.14);
+        gain.gain.setValueAtTime(0.52 * vel, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+
+        osc.connect(gain);
+        gain.connect(dryBus);
+
+        // Very subtle low-end room send
+        const kickWet = audioCtx.createGain();
+        kickWet.gain.setValueAtTime(0.08, now);
+        gain.connect(kickWet);
+        kickWet.connect(wetSendBus);
+
+        osc.start(now);
+        osc.stop(now + 0.36);
+      } else if (type === 'snare') {
+        const bufferSize = Math.floor(audioCtx.sampleRate * 0.20);
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(420, now);
+
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.28 * vel, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(dryBus);
+
+        // Send snare snap to stereo delay + reverb bus
+        const snareWet = audioCtx.createGain();
+        snareWet.gain.setValueAtTime(0.36, now);
+        gain.connect(snareWet);
+        snareWet.connect(wetSendBus);
+
+        noise.start(now);
+
+        const body = audioCtx.createOscillator();
+        const bodyGain = audioCtx.createGain();
+        body.type = 'triangle';
+        body.frequency.setValueAtTime(185, now);
+        body.frequency.exponentialRampToValueAtTime(92, now + 0.08);
+        bodyGain.gain.setValueAtTime(0.22 * vel, now);
+        bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        body.connect(bodyGain);
+        bodyGain.connect(dryBus);
+        body.start(now);
+        body.stop(now + 0.11);
+      } else if (type === 'hihat') {
+        const bufferSize = Math.floor(audioCtx.sampleRate * 0.08);
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(6500, now);
+
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.18 * vel, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(dryBus);
+
+        // Shimmering hi-hat send into stereo ping-pong delay
+        const hatWet = audioCtx.createGain();
+        hatWet.gain.setValueAtTime(0.42, now);
+        gain.connect(hatWet);
+        hatWet.connect(wetSendBus);
+
+        noise.start(now);
+      }
+    }
+
+    // --- SCALES & TUNING PRESETS ---
+    // staffStep: 0 = bottom line E4, 1 = F4, 2 = G4, 3 = A4, 4 = B4, 5 = C5, 6 = D5, 7 = E5, -1 = D4, -2 = C4
+    const SCALES = {
+      pentatonic: [
+        { name: 'E5', freq: 659.25, staffStep: 7, shape: 'bar',      color: '#f4a261' },
+        { name: 'D5', freq: 587.33, staffStep: 6, shape: 'triangle', color: '#f4a261' },
+        { name: 'B4', freq: 493.88, staffStep: 4, shape: 'bar',      color: '#f4a261' },
+        { name: 'A4', freq: 440.00, staffStep: 3, shape: 'diamond',  color: '#e76f51' },
+        { name: 'G4', freq: 392.00, staffStep: 2, shape: 'bar',      color: '#e76f51' },
+        { name: 'E4', freq: 329.63, staffStep: 0, shape: 'triangle', color: '#e76f51' }
+      ],
+      dorian: [
+        { name: 'B4', freq: 493.88, staffStep: 4, shape: 'bar',      color: '#f4a261' },
+        { name: 'A4', freq: 440.00, staffStep: 3, shape: 'triangle', color: '#f4a261' },
+        { name: 'G4', freq: 392.00, staffStep: 2, shape: 'bar',      color: '#f4a261' },
+        { name: 'F4', freq: 349.23, staffStep: 1, shape: 'diamond',  color: '#e76f51' },
+        { name: 'E4', freq: 329.63, staffStep: 0, shape: 'bar',      color: '#e76f51' },
+        { name: 'D4', freq: 293.66, staffStep: -1, shape: 'triangle', color: '#e76f51' }
+      ],
+      major: [
+        { name: 'C5', freq: 523.25, staffStep: 5, shape: 'bar',      color: '#f4a261' },
+        { name: 'B4', freq: 493.88, staffStep: 4, shape: 'triangle', color: '#f4a261' },
+        { name: 'A4', freq: 440.00, staffStep: 3, shape: 'bar',      color: '#f4a261' },
+        { name: 'G4', freq: 392.00, staffStep: 2, shape: 'diamond',  color: '#e76f51' },
+        { name: 'E4', freq: 329.63, staffStep: 0, shape: 'bar',      color: '#e76f51' },
+        { name: 'C4', freq: 261.63, staffStep: -2, shape: 'triangle', color: '#e76f51' }
+      ]
+    };
+
+    const DRUM_LANES = [
+      { kind: 'drum', name: 'Hat', drumType: 'hihat', staffStep: 8,  shape: 'diamond',  color: '#56cfe1' },
+      { kind: 'drum', name: 'Snr', drumType: 'snare', staffStep: 3,  shape: 'triangle', color: '#4ea8de' },
+      { kind: 'drum', name: 'Kck', drumType: 'kick',  staffStep: -1, shape: 'bar',      color: '#5e60ce' }
+    ];
+
+    let currentScale = 'pentatonic';
+    let lanes = [];
+    let shapes = [];
+    let orbs = [];
+    let writtenNotes = [];
+    let ripples = [];
+
+    let isPlaying = true;
+    let autoEmit = true;
+    let gravity = 380;
+    let emitterPhase = 0;
+    let emitterTimer = 0;
+
+    // Sheet music replay state
+    let isReplayingSheet = false;
+    let wasPlayingBeforeReplay = true;
+    let replayIndex = -1;
+    let replayTimer = null;
+
+    function buildLaneConfigs() {
+      const guitarNotes = SCALES[currentScale].map((n, idx) => ({
+        id: idx,
+        kind: 'guitar',
+        name: n.name,
+        freq: n.freq,
+        staffStep: n.staffStep,
+        shape: n.shape,
+        color: n.color
+      }));
+      const drums = DRUM_LANES.map((d, idx) => ({
+        ...d,
+        id: 6 + idx
+      }));
+      return [...guitarNotes, ...drums];
+    }
+
+    function computeLayout() {
+      const configs = buildLaneConfigs();
+      const topPad = 115;
+      const staffHeight = 185;
+      const playAreaH = Math.max(220, H - topPad - staffHeight - 20);
+      const spacing = playAreaH / (configs.length + 0.5);
+
+      lanes = configs.map((cfg, idx) => {
+        const extraGap = idx >= 6 ? 12 : 0;
+        const y = topPad + spacing * (idx + 0.65) + extraGap;
+        const oldLane = lanes[idx];
+        return {
+          ...cfg,
+          y,
+          vibAmp: oldLane ? oldLane.vibAmp : 0,
+          vibPhase: oldLane ? oldLane.vibPhase : 0,
+          pluckX: oldLane ? oldLane.pluckX : W * 0.5
+        };
+      });
+    }
+
+    function resizeCanvas() {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      computeLayout();
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    // Seed an initial pinball-like cascade of angled geometric deflectors
+    function seedInitialPattern() {
+      shapes = [
+        { laneIndex: 0, xRatio: 0.30, angle:  0.42, type: 'bar',      scale: 1, cooldown: 0 },
+        { laneIndex: 2, xRatio: 0.46, angle: -0.48, type: 'triangle', scale: 1, cooldown: 0 },
+        { laneIndex: 1, xRatio: 0.64, angle:  0.38, type: 'bar',      scale: 1, cooldown: 0 },
+        { laneIndex: 3, xRatio: 0.34, angle:  0.45, type: 'diamond',  scale: 1, cooldown: 0 },
+        { laneIndex: 4, xRatio: 0.56, angle: -0.40, type: 'bar',      scale: 1, cooldown: 0 },
+        { laneIndex: 5, xRatio: 0.38, angle:  0.35, type: 'triangle', scale: 1, cooldown: 0 },
+        { laneIndex: 6, xRatio: 0.72, angle: -0.45, type: 'diamond',  scale: 1, cooldown: 0 },
+        { laneIndex: 7, xRatio: 0.50, angle:  0.30, type: 'triangle', scale: 1, cooldown: 0 },
+        { laneIndex: 8, xRatio: 0.30, angle: -0.28, type: 'bar',      scale: 1, cooldown: 0 },
+        { laneIndex: 8, xRatio: 0.64, angle:  0.28, type: 'bar',      scale: 1, cooldown: 0 }
+      ];
+    }
+
+    function spawnOrb(x, y, vx = (Math.random() - 0.5) * 45, vy = 20) {
+      if (orbs.length >= 14) {
+        orbs.shift();
+      }
+      orbs.push({
+        x,
+        y,
+        prevX: x,
+        prevY: y,
+        vx,
+        vy,
+        r: 6.5,
+        trail: [],
+        bounces: 0,
+        maxBounces: 18,
+        stringCooldowns: {}
+      });
+    }
+
+    function getTrackBounds() {
+      return { left: Math.min(76, W * 0.1), right: W - Math.min(46, W * 0.06) };
+    }
+
+    function getMaxVisibleNotes() {
+      const bounds = getTrackBounds();
+      const noteStartX = bounds.left + 68;
+      const noteStepX = 34;
+      return Math.max(8, Math.floor((bounds.right - noteStartX - 20) / noteStepX));
+    }
+
+    // --- TRIGGER & SHEET MUSIC WRITER ---
+    function triggerLane(laneIndex, xPos, shapeObj = null, recordToStaff = true, velocity = 1.0) {
+      const lane = lanes[laneIndex];
+      if (!lane) return;
+
+      lane.vibAmp = (lane.kind === 'guitar' ? 11 : 6) * Math.min(1.4, velocity);
+      lane.vibPhase = 0;
+      lane.pluckX = xPos;
+
+      if (shapeObj) {
+        shapeObj.scale = 1.65;
+      }
+
+      ripples.push({
+        x: xPos,
+        y: lane.y,
+        r: 7,
+        alpha: 0.9,
+        color: lane.color,
+        ambient: spaceFxEnabled
+      });
+
+      const bounds = getTrackBounds();
+      const normalizedPan = ((xPos - bounds.left) / Math.max(1, bounds.right - bounds.left)) * 2 - 1;
+
+      if (lane.kind === 'guitar') {
+        playGuitarNote(lane.freq, velocity, normalizedPan * 0.65);
+      } else {
+        playDrum(lane.drumType, velocity);
+      }
+
+      if (recordToStaff) {
+        writtenNotes.push({
+          laneIndex,
+          name: lane.name,
+          kind: lane.kind,
+          freq: lane.freq,
+          drumType: lane.drumType,
+          staffStep: lane.staffStep,
+          color: lane.color,
+          velocity: Math.min(1.3, Math.max(0.35, velocity)),
+          highlight: 1.0
+        });
+
+        const maxVisible = getMaxVisibleNotes();
+        if (writtenNotes.length > maxVisible) {
+          writtenNotes.shift();
+        }
+      }
+    }
+
+    // --- STANDARD MIDI FILE (.mid) BINARY GENERATOR & EXPORT ---
+    function writeVarLen(value) {
+      let buffer = value & 0x7f;
+      const bytes = [];
+      while ((value >>= 7) > 0) {
+        buffer <<= 8;
+        buffer |= (value & 0x7f) | 0x80;
+      }
+      while (true) {
+        bytes.push(buffer & 0xff);
+        if (buffer & 0x80) buffer >>= 8;
+        else break;
+      }
+      return bytes;
+    }
+
+    function freqToMidi(freq) {
+      return Math.max(0, Math.min(127, Math.round(69 + 12 * Math.log2(freq / 440))));
+    }
+
+    function exportTranscribedMidi() {
+      const exportMidiBtn = document.getElementById('exportMidiBtn');
+      const notesToExport = writtenNotes.slice(-getMaxVisibleNotes());
+
+      if (notesToExport.length === 0) {
+        const prevText = exportMidiBtn.textContent;
+        exportMidiBtn.textContent = 'No Notes Yet';
+        setTimeout(() => {
+          exportMidiBtn.textContent = prevText;
+        }, 1200);
+        return;
+      }
+
+      const ticksPerQuarter = 480;
+      const stepTicks = 240; // Eighth-note spacing per transcribed note
+      const trackEvents = [];
+
+      // 1. Tempo Meta Event: 125 BPM (480,000 microseconds per quarter note = 0x075300)
+      trackEvents.push(0x00, 0xff, 0x51, 0x03, 0x07, 0x53, 0x00);
+
+      // 2. Program Change on Channel 0 (Guitar): Acoustic Guitar (steel) = Program 25 (0x19)
+      trackEvents.push(0x00, 0xc0, 0x19);
+
+      // 3. Encode each transcribed note sequentially
+      notesToExport.forEach((n) => {
+        const isGuitar = n.kind === 'guitar';
+        const channel = isGuitar ? 0 : 9; // Channel 10 (index 9) is General MIDI Percussion
+        let midiNote = 60;
+
+        if (isGuitar) {
+          midiNote = freqToMidi(n.freq);
+        } else {
+          if (n.drumType === 'kick') midiNote = 36;       // Bass Drum 1
+          else if (n.drumType === 'snare') midiNote = 38; // Acoustic Snare
+          else midiNote = 42;                             // Closed Hi-Hat
+        }
+
+        const velocity = Math.max(40, Math.min(127, Math.round((n.velocity || 0.9) * 96)));
+
+        // Note On at delta = 0
+        trackEvents.push(...writeVarLen(0), 0x90 | channel, midiNote, velocity);
+        // Note Off after stepTicks
+        trackEvents.push(...writeVarLen(stepTicks), 0x80 | channel, midiNote, 0x00);
+      });
+
+      // 4. End of Track Meta Event
+      trackEvents.push(0x00, 0xff, 0x2f, 0x00);
+
+      const trackLen = trackEvents.length;
+      const header = [
+        0x4d, 0x54, 0x68, 0x64, // "MThd"
+        0x00, 0x00, 0x00, 0x06, // Header size = 6
+        0x00, 0x00,             // Format 0 (single multi-channel track)
+        0x00, 0x01,             // 1 track
+        (ticksPerQuarter >> 8) & 0xff,
+        ticksPerQuarter & 0xff
+      ];
+
+      const trackHeader = [
+        0x4d, 0x54, 0x72, 0x6b, // "MTrk"
+        (trackLen >> 24) & 0xff,
+        (trackLen >> 16) & 0xff,
+        (trackLen >> 8) & 0xff,
+        trackLen & 0xff
+      ];
+
+      const midiBytes = new Uint8Array([...header, ...trackHeader, ...trackEvents]);
+      const blob = new Blob([midiBytes], { type: 'audio/midi' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gravity-sequencer-${currentScale}.mid`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      exportMidiBtn.textContent = '✓ Saved .mid';
+      exportMidiBtn.classList.add('exported');
+      setTimeout(() => {
+        exportMidiBtn.textContent = '⬇ Export MIDI';
+        exportMidiBtn.classList.remove('exported');
+      }, 1500);
+    }
+
+    // --- GEOMETRIC POLYGON & RICOCHET COLLISION ENGINE ---
+    function getShapeVertices(type, radius) {
+      if (type === 'bar') {
+        const hw = radius * 1.95;
+        const hh = radius * 0.42;
+        return [
+          { x: -hw, y: -hh },
+          { x:  hw, y: -hh },
+          { x:  hw, y:  hh },
+          { x: -hw, y:  hh }
+        ];
+      } else if (type === 'triangle') {
+        const r = radius * 1.45;
+        const verts = [];
+        for (let i = 0; i < 3; i++) {
+          const a = -Math.PI / 2 + (i * Math.PI * 2) / 3;
+          verts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+        }
+        return verts;
+      } else if (type === 'diamond') {
+        const rx = radius * 1.6;
+        const ry = radius * 0.95;
+        return [
+          { x: 0,   y: -ry },
+          { x: rx,  y: 0   },
+          { x: 0,   y: ry  },
+          { x: -rx, y: 0   }
+        ];
+      }
+      return [];
+    }
+
+    function closestPointOnSegment(px, py, ax, ay, bx, by) {
+      const abx = bx - ax;
+      const aby = by - ay;
+      const apx = px - ax;
+      const apy = py - ay;
+      const abLenSq = abx * abx + aby * aby;
+      if (abLenSq === 0) return { x: ax, y: ay };
+      const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abLenSq));
+      return { x: ax + t * abx, y: ay + t * aby };
+    }
+
+    function checkOrbShapeCollision(orb, shapeObj, sx, sy) {
+      const shapeRadius = 12;
+      const dx = orb.x - sx;
+      const dy = orb.y - sy;
+      const cosA = Math.cos(-shapeObj.angle);
+      const sinA = Math.sin(-shapeObj.angle);
+      const localX = dx * cosA - dy * sinA;
+      const localY = dx * sinA + dy * cosA;
+
+      if (Math.hypot(localX, localY) > shapeRadius * 2.2 + orb.r) return null;
+
+      const verts = getShapeVertices(shapeObj.type, shapeRadius);
+      let minDist = Infinity;
+      let bestPoint = null;
+      let bestEdgeNormal = null;
+
+      for (let i = 0; i < verts.length; i++) {
+        const a = verts[i];
+        const b = verts[(i + 1) % verts.length];
+        const cp = closestPointOnSegment(localX, localY, a.x, a.y, a.x === b.x && a.y === b.y ? a.x + 1 : b.x, b.y);
+        const dist = Math.hypot(localX - cp.x, localY - cp.y);
+        if (dist < minDist) {
+          minDist = dist;
+          bestPoint = cp;
+          const ex = b.x - a.x;
+          const ey = b.y - a.y;
+          const len = Math.hypot(ex, ey) || 1;
+          bestEdgeNormal = { x: ey / len, y: -ex / len };
+        }
+      }
+
+      if (minDist < orb.r) {
+        let nxLocal = localX - bestPoint.x;
+        let nyLocal = localY - bestPoint.y;
+        const nLen = Math.hypot(nxLocal, nyLocal);
+        if (nLen > 0.0001) {
+          nxLocal /= nLen;
+          nyLocal /= nLen;
+        } else if (bestEdgeNormal) {
+          nxLocal = bestEdgeNormal.x;
+          nyLocal = bestEdgeNormal.y;
+        } else {
+          nxLocal = 0;
+          nyLocal = -1;
+        }
+
+        const cosW = Math.cos(shapeObj.angle);
+        const sinW = Math.sin(shapeObj.angle);
+        const worldNX = nxLocal * cosW - nyLocal * sinW;
+        const worldNY = nxLocal * sinW + nyLocal * cosW;
+
+        return {
+          nx: worldNX,
+          ny: worldNY,
+          penetration: orb.r - minDist
+        };
+      }
+
+      return null;
+    }
+
+    // --- SHEET MUSIC REPLAY ENGINE ---
+    const replayStaffBtn = document.getElementById('replayStaffBtn');
+    const playBtn = document.getElementById('playBtn');
+
+    function stopSheetReplay() {
+      if (!isReplayingSheet) return;
+      isReplayingSheet = false;
+      replayIndex = -1;
+      if (replayTimer) {
+        clearTimeout(replayTimer);
+        replayTimer = null;
+      }
+      replayStaffBtn.textContent = '▶ Replay Melody';
+      replayStaffBtn.classList.remove('replaying');
+
+      isPlaying = wasPlayingBeforeReplay;
+      playBtn.textContent = isPlaying ? 'Pause' : 'Play';
+      playBtn.classList.toggle('active', isPlaying);
+    }
+
+    function startSheetReplay() {
+      ensureAudio();
+      if (writtenNotes.length === 0) return;
+
+      if (isReplayingSheet) {
+        stopSheetReplay();
+        return;
+      }
+
+      wasPlayingBeforeReplay = isPlaying;
+      isPlaying = false;
+      playBtn.textContent = 'Play';
+      playBtn.classList.remove('active');
+
+      isReplayingSheet = true;
+      replayIndex = 0;
+      replayStaffBtn.textContent = '■ Stop Replay';
+      replayStaffBtn.classList.add('replaying');
+
+      stepSheetReplay();
+    }
+
+    function stepSheetReplay() {
+      if (!isReplayingSheet) return;
+      const visibleNotes = writtenNotes.slice(-getMaxVisibleNotes());
+
+      if (replayIndex >= visibleNotes.length) {
+        stopSheetReplay();
+        return;
+      }
+
+      const note = visibleNotes[replayIndex];
+      note.highlight = 1.0;
+
+      if (note.kind === 'guitar') {
+        playGuitarNote(note.freq, note.velocity || 1.0, 0.0);
+      } else {
+        playDrum(note.drumType, note.velocity || 1.0);
+      }
+
+      const lane = lanes[note.laneIndex];
+      if (lane) {
+        const bounds = getTrackBounds();
+        const midX = (bounds.left + bounds.right) / 2;
+        lane.vibAmp = lane.kind === 'guitar' ? 10 : 5;
+        lane.vibPhase = 0;
+        lane.pluckX = midX;
+        ripples.push({
+          x: midX,
+          y: lane.y,
+          r: 8,
+          alpha: 0.78,
+          color: note.color,
+          ambient: spaceFxEnabled
+        });
+      }
+
+      replayIndex++;
+      replayTimer = setTimeout(stepSheetReplay, 240);
+    }
+
+    // --- POINTER INTERACTION (Drop Orb, Place/Rotate Shape, or Drag to Strum) ---
+    let isPointerDown = false;
+    let pointerMoved = false;
+    let lastPointerY = null;
+    let downX = 0;
+    let downY = 0;
+
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    canvas.addEventListener('pointerdown', (e) => {
+      ensureAudio();
+      if (e.button === 2) {
+        deleteShapeAt(e.clientX, e.clientY);
+        return;
+      }
+      isPointerDown = true;
+      pointerMoved = false;
+      downX = e.clientX;
+      downY = e.clientY;
+      lastPointerY = e.clientY;
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isPointerDown) return;
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) > 8) {
+        pointerMoved = true;
+      }
+
+      const bounds = getTrackBounds();
+      if (e.clientX >= bounds.left && e.clientX <= bounds.right && lastPointerY !== null) {
+        lanes.forEach((lane, idx) => {
+          const crossedDown = lastPointerY < lane.y && e.clientY >= lane.y;
+          const crossedUp = lastPointerY > lane.y && e.clientY <= lane.y;
+          if (crossedDown || crossedUp) {
+            triggerLane(idx, e.clientX, null, true, 0.9);
+          }
+        });
+      }
+      lastPointerY = e.clientY;
+    });
+
+    window.addEventListener('pointerup', (e) => {
+      if (!isPointerDown) return;
+      isPointerDown = false;
+      if (!pointerMoved && e.button === 0) {
+        handleCanvasClick(e.clientX, e.clientY);
+      }
+      lastPointerY = null;
+    });
+
+    canvas.addEventListener('dblclick', (e) => {
+      deleteShapeAt(e.clientX, e.clientY);
+    });
+
+    function deleteShapeAt(x, y) {
+      const bounds = getTrackBounds();
+      const trackW = bounds.right - bounds.left;
+      const idx = shapes.findIndex((s) => {
+        const lane = lanes[s.laneIndex];
+        if (!lane) return false;
+        const sx = bounds.left + s.xRatio * trackW;
+        return Math.hypot(x - sx, y - lane.y) < 24;
+      });
+      if (idx !== -1) {
+        shapes.splice(idx, 1);
+      }
+    }
+
+    function handleCanvasClick(x, y) {
+      const staffBoxTop = H - 180;
+      if (y >= staffBoxTop) return;
+
+      const bounds = getTrackBounds();
+      const trackW = bounds.right - bounds.left;
+
+      // 1. Clicking an existing geometric shape rotates its deflection angle by 30 deg
+      const hitShape = shapes.find((s) => {
+        const lane = lanes[s.laneIndex];
+        if (!lane) return false;
+        const sx = bounds.left + s.xRatio * trackW;
+        return Math.hypot(x - sx, y - lane.y) < 22;
+      });
+
+      if (hitShape) {
+        hitShape.angle += Math.PI / 6;
+        hitShape.scale = 1.45;
+        const sx = bounds.left + hitShape.xRatio * trackW;
+        triggerLane(hitShape.laneIndex, sx, hitShape, false, 0.7);
+        return;
+      }
+
+      // 2. Clicking near a string or drum lane places a new angled deflector
+      if (x >= bounds.left && x <= bounds.right) {
+        let closestIdx = -1;
+        let minDist = 14;
+        lanes.forEach((lane, idx) => {
+          const d = Math.abs(y - lane.y);
+          if (d < minDist) {
+            minDist = d;
+            closestIdx = idx;
+          }
+        });
+
+        if (closestIdx !== -1) {
+          const lane = lanes[closestIdx];
+          const clickRatio = (x - bounds.left) / trackW;
+          const defaultAngle = (shapes.length % 2 === 0 ? 1 : -1) * 0.42;
+          const newShape = {
+            laneIndex: closestIdx,
+            xRatio: clickRatio,
+            angle: defaultAngle,
+            type: lane.shape,
+            scale: 1.5,
+            cooldown: 0
+          };
+          shapes.push(newShape);
+          triggerLane(closestIdx, x, newShape, true, 0.95);
+          return;
+        }
+      }
+
+      // 3. Clicking in open space drops a gravity orb right at the cursor
+      const clampedX = Math.max(bounds.left + 10, Math.min(bounds.right - 10, x));
+      spawnOrb(clampedX, y, (Math.random() - 0.5) * 35, 10);
+    }
+
+    // --- HUD & DOCK CONTROLS BINDING ---
+    const emitterBtn = document.getElementById('emitterBtn');
+    const spaceFxBtn = document.getElementById('spaceFxBtn');
+    const gravitySlider = document.getElementById('gravitySlider');
+    const spawnOrbBtn = document.getElementById('spawnOrbBtn');
+    const clearOrbsBtn = document.getElementById('clearOrbsBtn');
+    const clearShapesBtn = document.getElementById('clearShapesBtn');
+    const clearStaffBtn = document.getElementById('clearStaffBtn');
+    const scaleButtons = document.querySelectorAll('#scaleSelector button');
+
+    playBtn.addEventListener('click', () => {
+      ensureAudio();
+      if (isReplayingSheet) stopSheetReplay();
+      isPlaying = !isPlaying;
+      playBtn.textContent = isPlaying ? 'Pause' : 'Play';
+      playBtn.classList.toggle('active', isPlaying);
+    });
+
+    emitterBtn.addEventListener('click', () => {
+      ensureAudio();
+      autoEmit = !autoEmit;
+      emitterBtn.classList.toggle('active', autoEmit);
+    });
+
+    spaceFxBtn.addEventListener('click', () => {
+      ensureAudio();
+      setSpaceFx(!spaceFxEnabled);
+      spaceFxBtn.classList.toggle('space-active', spaceFxEnabled);
+    });
+
+    scaleButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        ensureAudio();
+        const selected = btn.getAttribute('data-scale');
+        if (selected === currentScale) return;
+
+        currentScale = selected;
+        scaleButtons.forEach((b) => b.classList.toggle('active', b === btn));
+        computeLayout();
+
+        // Subtle upward harmonic preview of the new scale
+        const bounds = getTrackBounds();
+        for (let i = 5; i >= 0; i--) {
+          setTimeout(() => {
+            triggerLane(i, bounds.left + 40 + (5 - i) * 28, null, false, 0.65);
+          }, (5 - i) * 45);
+        }
+      });
+    });
+
+    gravitySlider.addEventListener('input', (e) => {
+      gravity = parseFloat(e.target.value);
+    });
+
+    spawnOrbBtn.addEventListener('click', () => {
+      ensureAudio();
+      const bounds = getTrackBounds();
+      const rx = bounds.left + (0.2 + Math.random() * 0.6) * (bounds.right - bounds.left);
+      spawnOrb(rx, 88, (Math.random() - 0.5) * 60, 20);
+    });
+
+    clearOrbsBtn.addEventListener('click', () => {
+      orbs = [];
+    });
+
+    clearShapesBtn.addEventListener('click', () => {
+      shapes = [];
+    });
+
+    clearStaffBtn.addEventListener('click', () => {
+      if (isReplayingSheet) stopSheetReplay();
+      writtenNotes = [];
+    });
+
+    replayStaffBtn.addEventListener('click', startSheetReplay);
+    document.getElementById('exportMidiBtn').addEventListener('click', exportTranscribedMidi);
+
+    // --- DRAW ANGLED GEOMETRIC DEFLECTOR ---
+    function drawGeometricShape(shapeObj, x, y, color) {
+      const radius = 12;
+      const verts = getShapeVertices(shapeObj.type, radius);
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(shapeObj.angle);
+      ctx.scale(shapeObj.scale, shapeObj.scale);
+
+      if (spaceFxEnabled && shapeObj.scale > 1.05) {
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 14;
+      }
+
+      ctx.beginPath();
+      verts.forEach((v, i) => {
+        if (i === 0) ctx.moveTo(v.x, v.y);
+        else ctx.lineTo(v.x, v.y);
+      });
+      ctx.closePath();
+
+      ctx.fillStyle = '#141822';
+      ctx.fill();
+      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+
+      // Surface normal indicator tick
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -radius * 0.75);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // --- SHEET MUSIC STAFF RENDERER (Bottom Dock) ---
+    function drawSheetMusic(dt) {
+      const staffBoxTop = H - 180;
+      const bounds = getTrackBounds();
+      const staffLeft = bounds.left;
+      const staffRight = bounds.right;
+      const lineSpacing = 13;
+      const bottomLineY = staffBoxTop + 102;
+
+      ctx.fillStyle = 'rgba(16, 19, 26, 0.94)';
+      ctx.fillRect(0, staffBoxTop, W, H - staffBoxTop);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, staffBoxTop);
+      ctx.lineTo(W, staffBoxTop);
+      ctx.stroke();
+
+      // Status badge on left of staff header
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+      ctx.font = '11px "JetBrains Mono", monospace';
+      ctx.textAlign = 'left';
+      const fxLabel = spaceFxEnabled ? '✦ SPACE FX ON' : 'DRY';
+      ctx.fillText(`SCALE: ${currentScale.toUpperCase()}  •  ${fxLabel}`, staffLeft, staffBoxTop + 22);
+
+      // 5 Staff lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const y = bottomLineY - i * lineSpacing;
+        ctx.beginPath();
+        ctx.moveTo(staffLeft, y);
+        ctx.lineTo(staffRight, y);
+        ctx.stroke();
+      }
+
+      // Treble Clef
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.font = '52px serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('𝄞', staffLeft + 8, bottomLineY - lineSpacing * 1.9);
+
+      const noteStartX = staffLeft + 68;
+      const noteStepX = 34;
+      const maxVisible = getMaxVisibleNotes();
+      const visibleNotes = writtenNotes.slice(-maxVisible);
+
+      if (visibleNotes.length === 0) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.font = '12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Drop orbs onto angled shapes and strings above to write sheet music...', W / 2, bottomLineY - lineSpacing * 2);
+        return;
+      }
+
+      visibleNotes.forEach((n, i) => {
+        const nx = noteStartX + i * noteStepX;
+        const ny = bottomLineY - n.staffStep * (lineSpacing / 2);
+
+        if (n.highlight > 0) {
+          n.highlight = Math.max(0, n.highlight - dt * 2.4);
+        }
+
+        // Measure barlines every 4 notes
+        if (i > 0 && i % 4 === 0) {
+          const barX = nx - noteStepX / 2;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+          ctx.beginPath();
+          ctx.moveTo(barX, bottomLineY - lineSpacing * 4);
+          ctx.lineTo(barX, bottomLineY);
+          ctx.stroke();
+        }
+
+        // Replay playhead beam
+        if (isReplayingSheet && i === replayIndex - 1) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(86, 207, 225, 0.55)';
+          ctx.lineWidth = 22;
+          ctx.beginPath();
+          ctx.moveTo(nx, bottomLineY - lineSpacing * 4.6);
+          ctx.lineTo(nx, bottomLineY + lineSpacing * 1.6);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Ledger lines for C4 and below
+        if (n.staffStep <= -2) {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+          ctx.lineWidth = 1;
+          for (let step = -2; step >= n.staffStep; step -= 2) {
+            const ly = bottomLineY - step * (lineSpacing / 2);
+            ctx.beginPath();
+            ctx.moveTo(nx - 9, ly);
+            ctx.lineTo(nx + 9, ly);
+            ctx.stroke();
+          }
+        }
+
+        ctx.save();
+        const activeColor = n.highlight > 0.15 ? '#ffffff' : n.color;
+        ctx.strokeStyle = activeColor;
+        ctx.fillStyle = activeColor;
+
+        if (spaceFxEnabled && n.highlight > 0.1) {
+          ctx.shadowColor = n.color;
+          ctx.shadowBlur = 12 * n.highlight;
+        }
+
+        const scaleBoost = 1 + n.highlight * 0.35;
+        ctx.translate(nx, ny);
+        ctx.scale(scaleBoost, scaleBoost);
+
+        if (n.kind === 'guitar') {
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 6, 4.3, -0.32, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          if (n.staffStep < 4) {
+            ctx.moveTo(5, 0);
+            ctx.lineTo(5, -28);
+          } else {
+            ctx.moveTo(-5, 0);
+            ctx.lineTo(-5, 28);
+          }
+          ctx.stroke();
+        } else {
+          ctx.lineWidth = 2;
+          const s = 4.5;
+          ctx.beginPath();
+          ctx.moveTo(-s, -s);
+          ctx.lineTo(s, s);
+          ctx.moveTo(s, -s);
+          ctx.lineTo(-s, s);
+          ctx.stroke();
+
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(4.5, 0);
+          ctx.lineTo(4.5, -25);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        ctx.font = '10px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = n.highlight > 0.15 ? '#a8f0fa' : 'rgba(255, 255, 255, 0.45)';
+        ctx.fillText(n.name, nx, staffBoxTop + 150);
+      });
+    }
+
+    // --- MAIN PHYSICS & ANIMATION LOOP ---
+    let lastTime = performance.now();
+
+    function animate(now) {
+      const dt = Math.min(0.035, Math.max(0.001, (now - lastTime) / 1000));
+      lastTime = now;
+
+      ctx.clearRect(0, 0, W, H);
+      const bounds = getTrackBounds();
+      const trackW = bounds.right - bounds.left;
+      const staffBoxTop = H - 180;
+
+      // Update & Draw Overhead Auto-Drop Emitter Nozzle
+      emitterPhase += dt * 0.45;
+      const emitterX = bounds.left + (0.5 + Math.sin(emitterPhase) * 0.32) * trackW;
+      const emitterY = 92;
+
+      if (autoEmit && isPlaying) {
+        emitterTimer += dt;
+        if (emitterTimer >= 1.85) {
+          emitterTimer = 0;
+          spawnOrb(emitterX, emitterY, Math.cos(emitterPhase) * 28, 15);
+        }
+      }
+
+      // Draw minimal emitter nozzle
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(emitterX, emitterY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = autoEmit ? '#ffd6a5' : 'rgba(255, 255, 255, 0.2)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(emitterX, emitterY, 10, 0, Math.PI * 2);
+      ctx.strokeStyle = autoEmit ? 'rgba(244, 162, 97, 0.45)' : 'rgba(255, 255, 255, 0.1)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      ctx.restore();
+
+      shapes.forEach((s) => {
+        if (s.cooldown > 0) s.cooldown = Math.max(0, s.cooldown - dt);
+      });
+
+      // Step 2D Gravity & Polygon Ricochet Physics
+      if (isPlaying) {
+        const subSteps = 3;
+        const subDt = dt / subSteps;
+
+        for (let step = 0; step < subSteps; step++) {
+          for (let i = orbs.length - 1; i >= 0; i--) {
+            const orb = orbs[i];
+            orb.prevX = orb.x;
+            orb.prevY = orb.y;
+
+            orb.vy += gravity * subDt;
+            orb.x += orb.vx * subDt;
+            orb.y += orb.vy * subDt;
+
+            for (const key in orb.stringCooldowns) {
+              orb.stringCooldowns[key] -= subDt;
+              if (orb.stringCooldowns[key] <= 0) delete orb.stringCooldowns[key];
+            }
+
+            // Left / Right playfield wall bounce
+            if (orb.x - orb.r < bounds.left) {
+              orb.x = bounds.left + orb.r;
+              orb.vx = Math.abs(orb.vx) * 0.85;
+            } else if (orb.x + orb.r > bounds.right) {
+              orb.x = bounds.right - orb.r;
+              orb.vx = -Math.abs(orb.vx) * 0.85;
+            }
+
+            // 1. Ricochet against Angled Geometric Shapes
+            for (let j = 0; j < shapes.length; j++) {
+              const s = shapes[j];
+              const lane = lanes[s.laneIndex];
+              if (!lane) continue;
+              const sx = bounds.left + s.xRatio * trackW;
+              const sy = lane.y;
+
+              const hit = checkOrbShapeCollision(orb, s, sx, sy);
+              if (hit) {
+                orb.x += hit.nx * (hit.penetration + 0.5);
+                orb.y += hit.ny * (hit.penetration + 0.5);
+
+                const vn = orb.vx * hit.nx + orb.vy * hit.ny;
+                if (vn < 0) {
+                  const restitution = 0.86;
+                  orb.vx = (orb.vx - (1 + restitution) * vn * hit.nx);
+                  orb.vy = (orb.vy - (1 + restitution) * vn * hit.ny);
+
+                  const speedMag = Math.hypot(orb.vx, orb.vy);
+                  if (speedMag < 170) {
+                    const boost = 175 / (speedMag || 1);
+                    orb.vx *= boost;
+                    orb.vy *= boost;
+                  }
+
+                  orb.bounces++;
+                  orb.stringCooldowns[s.laneIndex] = 0.18;
+
+                  if (s.cooldown <= 0) {
+                    s.cooldown = 0.09;
+                    const velNorm = Math.min(1.3, Math.hypot(orb.vx, orb.vy) / 340);
+                    triggerLane(s.laneIndex, sx, s, true, velNorm);
+                  }
+                }
+              }
+            }
+
+            // 2. Pluck Guitar Strings / Drum Lanes when orb slices through
+            lanes.forEach((lane, laneIdx) => {
+              if (orb.stringCooldowns[laneIdx]) return;
+              const crossedDown = orb.prevY < lane.y && orb.y >= lane.y;
+              const crossedUp = orb.prevY > lane.y && orb.y <= lane.y;
+              if (crossedDown || crossedUp) {
+                orb.stringCooldowns[laneIdx] = 0.16;
+                const velNorm = Math.min(1.2, Math.hypot(orb.vx, orb.vy) / 360);
+                triggerLane(laneIdx, orb.x, null, true, velNorm);
+              }
+            });
+
+            // Despawn orb when it reaches the sheet music dock
+            if (orb.y + orb.r >= staffBoxTop - 4 || orb.bounces >= orb.maxBounces) {
+              orbs.splice(i, 1);
+            }
+          }
+        }
+
+        orbs.forEach((orb) => {
+          orb.trail.push({ x: orb.x, y: orb.y });
+          if (orb.trail.length > 16) orb.trail.shift();
+        });
+      }
+
+      // Draw Guitar Strings & Drum Lanes
+      lanes.forEach((lane, idx) => {
+        ctx.font = '11px "JetBrains Mono", monospace';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = lane.kind === 'guitar' ? 'rgba(244, 162, 97, 0.82)' : 'rgba(86, 207, 225, 0.82)';
+        ctx.fillText(lane.name, bounds.left - 14, lane.y);
+
+        if (lane.vibAmp > 0.05) {
+          lane.vibAmp *= Math.pow(0.015, dt);
+          lane.vibPhase += dt * 55;
+        } else {
+          lane.vibAmp = 0;
+        }
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(bounds.left, lane.y);
+
+        if (lane.kind === 'guitar' && lane.vibAmp > 0.1) {
+          const midX = (bounds.left + bounds.right) / 2;
+          const offset = Math.sin(lane.vibPhase) * lane.vibAmp;
+          ctx.quadraticCurveTo(lane.pluckX || midX, lane.y + offset, bounds.right, lane.y);
+          ctx.strokeStyle = lane.color;
+          ctx.lineWidth = 1.6 + (idx * 0.22);
+          if (spaceFxEnabled) {
+            ctx.shadowColor = lane.color;
+            ctx.shadowBlur = 12;
+          }
+        } else if (lane.kind === 'guitar') {
+          ctx.lineTo(bounds.right, lane.y);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+          ctx.lineWidth = 1.1 + (idx * 0.22);
+        } else {
+          ctx.setLineDash([4, 8]);
+          ctx.lineTo(bounds.right, lane.y);
+          ctx.strokeStyle = lane.vibAmp > 0.2 ? lane.color : 'rgba(78, 168, 222, 0.22)';
+          ctx.lineWidth = 1.4;
+        }
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // Draw Ripples (with secondary ambient echo bloom when Space FX is active)
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        const rp = ripples[i];
+        rp.r += (rp.ambient ? 78 : 62) * dt;
+        rp.alpha -= (rp.ambient ? 1.15 : 1.6) * dt;
+        if (rp.alpha <= 0) {
+          ripples.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2);
+        ctx.strokeStyle = rp.color;
+        ctx.globalAlpha = rp.alpha;
+        ctx.lineWidth = 1.8;
+        if (rp.ambient) {
+          ctx.shadowColor = rp.color;
+          ctx.shadowBlur = 14;
+        }
+        ctx.stroke();
+
+        // Echo ring representing stereo delay reflection
+        if (rp.ambient && rp.r > 18) {
+          ctx.beginPath();
+          ctx.arc(rp.x, rp.y, rp.r * 0.62, 0, Math.PI * 2);
+          ctx.strokeStyle = '#a78bfa';
+          ctx.globalAlpha = rp.alpha * 0.55;
+          ctx.lineWidth = 1.1;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Draw Placed Angled Geometric Shapes
+      shapes.forEach((s) => {
+        const lane = lanes[s.laneIndex];
+        if (!lane) return;
+        const sx = bounds.left + s.xRatio * trackW;
+        s.scale += (1 - s.scale) * Math.min(1, dt * 12);
+        drawGeometricShape(s, sx, lane.y, lane.color);
+      });
+
+      // Draw Bouncing Gravity Orbs & Glowing Motion Trails
+      orbs.forEach((orb) => {
+        if (orb.trail.length > 1) {
+          ctx.save();
+          for (let i = 1; i < orb.trail.length; i++) {
+            const p0 = orb.trail[i - 1];
+            const p1 = orb.trail[i];
+            const alpha = (i / orb.trail.length) * (spaceFxEnabled ? 0.55 : 0.42);
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.strokeStyle = spaceFxEnabled
+              ? `rgba(216, 180, 254, ${alpha})`
+              : `rgba(255, 214, 165, ${alpha})`;
+            ctx.lineWidth = (i / orb.trail.length) * orb.r * 1.45;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(orb.x, orb.y, orb.r, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = spaceFxEnabled ? '#a78bfa' : '#f4a261';
+        ctx.shadowBlur = spaceFxEnabled ? 16 : 11;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Draw Sheet Music Staff & Replay Head
+      drawSheetMusic(dt);
+
+      requestAnimationFrame(animate);
+    }
+
+    // Start simulation on window load
+    window.onload = function () {
+      resizeCanvas();
+      seedInitialPattern();
+      spawnOrb(W * 0.32, 92, 25, 10);
+      lastTime = performance.now();
+      requestAnimationFrame(animate);
+    };
+  </script>
+</body>
+</html>

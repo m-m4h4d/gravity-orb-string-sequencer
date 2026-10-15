@@ -3,4 +3,4 @@ Gravity Orb &amp; String Sequencer is a single self-contained HTML file. It incl
 
 ## Orbfall
 
-The project goes by **Orbfall**. `landing.html` is the landing page: it covers every feature, follows the system light/dark theme (with a manual toggle), and links to the instrument at `index.html`. `favicon.svg` is shared by both pages.
+The project goes by **Orbfall**. `index.html` is the landing page: it covers every feature, follows the system light/dark theme (with a manual toggle), and links to the instrument at `app.html`. `favicon.svg` is shared by both pages.
