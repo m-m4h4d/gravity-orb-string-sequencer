@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orbfall · Gravity Orb & String Sequencer</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <meta name="description" content="A physics-driven browser instrument: drop gravity orbs onto guitar strings and drum lanes, bend them with angled deflectors, and watch your melody transcribe itself into sheet music and MIDI." />
+  <meta name="color-scheme" content="light dark" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>
+    // Apply the saved theme before first paint to avoid a flash
+    (function () {
+      try {
+        var t = localStorage.getItem('orbfall-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root {
+      --bg: #f6f3ee;
+      --bg-alt: #efeae2;
+      --panel: rgba(255, 255, 255, 0.72);
+      --panel-solid: #ffffff;
+      --border: rgba(20, 22, 28, 0.10);
+      --text: #16181d;
+      --muted: #5d6270;
+      --string: rgba(22, 24, 29, 0.22);
+      --accent-guitar: #d9772c;
+      --accent-guitar-soft: rgba(217, 119, 44, 0.12);
+      --accent-drum: #2f7fb8;
+      --accent-drum-soft: rgba(47, 127, 184, 0.12);
+      --accent-space: #7c5ce0;
+      --accent-space-soft: rgba(124, 92, 224, 0.12);
+      --accent-replay: #1f9aac;
+      --accent-replay-soft: rgba(31, 154, 172, 0.12);
+      --cta-bg: #16181d;
+      --cta-text: #f6f3ee;
+      --shadow: 0 18px 40px rgba(20, 22, 28, 0.08);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0d0f12;
+        --bg-alt: #12151a;
+        --panel: rgba(22, 25, 32, 0.80);
+        --panel-solid: #161920;
+        --border: rgba(255, 255, 255, 0.08);
+        --text: #e6e8ec;
+        --muted: #8a909e;
+        --string: rgba(230, 232, 236, 0.16);
+        --accent-guitar: #f4a261;
+        --accent-guitar-soft: rgba(244, 162, 97, 0.14);
+        --accent-drum: #4ea8de;
+        --accent-drum-soft: rgba(78, 168, 222, 0.14);
+        --accent-space: #a78bfa;
+        --accent-space-soft: rgba(167, 139, 250, 0.14);
+        --accent-replay: #56cfe1;
+        --accent-replay-soft: rgba(86, 207, 225, 0.14);
+        --cta-bg: #f4a261;
+        --cta-text: #1a1206;
+        --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #0d0f12;
+      --bg-alt: #12151a;
+      --panel: rgba(22, 25, 32, 0.80);
+      --panel-solid: #161920;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e6e8ec;
+      --muted: #8a909e;
+      --string: rgba(230, 232, 236, 0.16);
+      --accent-guitar: #f4a261;
+      --accent-guitar-soft: rgba(244, 162, 97, 0.14);
+      --accent-drum: #4ea8de;
+      --accent-drum-soft: rgba(78, 168, 222, 0.14);
+      --accent-space: #a78bfa;
+      --accent-space-soft: rgba(167, 139, 250, 0.14);
+      --accent-replay: #56cfe1;
+      --accent-replay-soft: rgba(86, 207, 225, 0.14);
+      --cta-bg: #f4a261;
+      --cta-text: #1a1206;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 0.25s ease, color 0.25s ease;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; }
+
+    .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+    .wrap {
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    @media (min-width: 640px) {
+      .wrap { padding: 0 28px; }
+    }
+
+    /* ---------- Nav ---------- */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav .wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      gap: 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .logo { width: 30px; height: 30px; flex-shrink: 0; }
+
+    .wordmark { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-link {
+      font-size: 13px;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+
+    .nav-link:hover { color: var(--text); }
+
+    @media (max-width: 560px) {
+      .nav-link.hide-sm { display: none; }
+    }
+
+    .theme-toggle {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.16s ease;
+    }
+
+    .theme-toggle:hover { background: var(--bg-alt); }
+    .theme-toggle svg { width: 17px; height: 17px; }
+    .theme-toggle .icon-sun { display: none; }
+    .is-dark .theme-toggle .icon-sun { display: block; }
+    .is-dark .theme-toggle .icon-moon { display: none; }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font: inherit;
+      font-weight: 600;
+      font-size: 15px;
+      text-decoration: none;
+      padding: 13px 24px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--cta-bg);
+      color: var(--cta-text);
+      box-shadow: 0 10px 28px var(--accent-guitar-soft);
+    }
+
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 14px 34px var(--accent-guitar-soft); }
+
+    .btn-ghost {
+      background: var(--panel);
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .btn-ghost:hover { background: var(--bg-alt); }
+
+    .btn-sm { padding: 8px 16px; font-size: 13px; }
+
+    .btn svg { width: 16px; height: 16px; }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #heroCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hero-fade {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 70% at 30% 50%, var(--bg) 20%, transparent 75%);
+      pointer-events: none;
+    }
+
+    .hero-inner {
+      position: relative;
+      padding: 88px 0 96px;
+      max-width: 640px;
+    }
+
+    @media (max-width: 640px) {
+      .hero-inner { padding: 56px 0 64px; }
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--accent-space);
+      background: var(--accent-space-soft);
+      border: 1px solid color-mix(in srgb, var(--accent-space) 35%, transparent);
+      padding: 5px 12px;
+      border-radius: 999px;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      font-size: clamp(36px, 6.4vw, 64px);
+      line-height: 1.04;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+
+    h1 .accent { color: var(--accent-guitar); }
+
+    .lede {
+      font-size: clamp(16px, 2.1vw, 19px);
+      color: var(--muted);
+      max-width: 540px;
+      margin-bottom: 32px;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 20px;
+      margin-top: 28px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .meta-row span::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-replay);
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    /* ---------- Sections ---------- */
+    section { padding: 88px 0; }
+
+    @media (max-width: 640px) {
+      section { padding: 64px 0; }
+    }
+
+    .section-head {
+      max-width: 620px;
+      margin-bottom: 44px;
+    }
+
+    .kicker {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent-guitar);
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: clamp(28px, 4vw, 40px);
+      line-height: 1.12;
+      letter-spacing: -0.02em;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    .section-head p { color: var(--muted); font-size: 17px; }
+
+    /* ---------- Feature grid ---------- */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: color-mix(in srgb, var(--tone, var(--accent-guitar)) 45%, transparent);
+    }
+
+    .card .icon {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--tone-soft, var(--accent-guitar-soft));
+      color: var(--tone, var(--accent-guitar));
+      margin-bottom: 16px;
+    }
+
+    .card .icon svg { width: 21px; height: 21px; }
+
+    .card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+
+    .card p { color: var(--muted); font-size: 14.5px; }
+
+    .card ul {
+      list-style: none;
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .card li {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 11.5px;
+      color: var(--text);
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 8px;
+    }
+
+    .tone-guitar { --tone: var(--accent-guitar); --tone-soft: var(--accent-guitar-soft); }
+    .tone-drum   { --tone: var(--accent-drum);   --tone-soft: var(--accent-drum-soft); }
+    .tone-space  { --tone: var(--accent-space);  --tone-soft: var(--accent-space-soft); }
+    .tone-replay { --tone: var(--accent-replay); --tone-soft: var(--accent-replay-soft); }
+
+    /* ---------- Space FX spotlight ---------- */
+    .alt { background: var(--bg-alt); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 40px;
+      align-items: center;
+    }
+
+    @media (min-width: 900px) {
+      .split { grid-template-columns: 1fr 1fr; gap: 56px; }
+    }
+
+    .signal {
+      background: var(--panel-solid);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .signal svg { width: 100%; height: auto; display: block; }
+
+    .signal .node rect { fill: var(--bg-alt); stroke: var(--border); }
+    .signal .node text { fill: var(--text); font: 500 12px "Inter", sans-serif; }
+    .signal .node .sub { fill: var(--muted); font: 400 10.5px "JetBrains Mono", monospace; }
+    .signal .node.space rect { fill: var(--accent-space-soft); stroke: color-mix(in srgb, var(--accent-space) 50%, transparent); }
+    .signal .node.dry rect { fill: var(--accent-guitar-soft); stroke: color-mix(in srgb, var(--accent-guitar) 45%, transparent); }
+    .signal .wire { fill: none; stroke: var(--muted); stroke-width: 1.4; opacity: 0.55; }
+    .signal .wire.wet { stroke: var(--accent-space); opacity: 0.9; stroke-dasharray: 4 4; }
+    .signal .arrow { fill: var(--muted); opacity: 0.55; }
+    .signal .arrow.wet { fill: var(--accent-space); opacity: 0.9; }
+
+    .specs {
+      list-style: none;
+      display: grid;
+      gap: 14px;
+      margin-top: 24px;
+    }
+
+    .specs li {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 12px;
+      align-items: baseline;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 15px;
+    }
+
+    .specs li:last-child { border-bottom: 0; }
+
+    .specs .val {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 14px;
+      color: var(--accent-space);
+      font-weight: 500;
+    }
+
+    .specs .desc { color: var(--muted); }
+
+    /* ---------- How it works ---------- */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+      gap: 16px;
+      counter-reset: step;
+    }
+
+    .step {
+      position: relative;
+      padding: 24px;
+      border-radius: 18px;
+      border: 1px dashed var(--border);
+    }
+
+    .step::before {
+      counter-increment: step;
+      content: counter(step, decimal-leading-zero);
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 13px;
+      color: var(--accent-guitar);
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    .step h3 { font-size: 17px; margin-bottom: 6px; }
+    .step p { color: var(--muted); font-size: 14.5px; }
+
+    kbd {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 12px;
+      background: var(--panel-solid);
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      padding: 1px 6px;
+      color: var(--text);
+    }
+
+    /* ---------- Controls table ---------- */
+    .controls {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14.5px;
+      margin-top: 40px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .controls th, .controls td {
+      text-align: left;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .controls tr:last-child td { border-bottom: 0; }
+
+    .controls th {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--bg-alt);
+    }
+
+    .controls td:first-child { white-space: nowrap; font-weight: 500; }
+    .controls td:last-child { color: var(--muted); }
+
+    @media (max-width: 560px) {
+      .controls th, .controls td { padding: 12px; }
+      .controls td:first-child { white-space: normal; }
+    }
+
+    /* ---------- Final CTA ---------- */
+    .final {
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .final h2 { margin-bottom: 14px; }
+    .final p { color: var(--muted); font-size: 17px; max-width: 520px; margin: 0 auto 30px; }
+    .final .cta-row { justify-content: center; }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    footer .wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+    }
+
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--text); }
+
+    :focus-visible {
+      outline: 2px solid var(--accent-space);
+      outline-offset: 3px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .card, .btn { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="nav">
+    <div class="wrap">
+      <a class="brand" href="#top" aria-label="Orbfall home">
+        <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+          <defs>
+            <radialGradient id="logoOrb" cx="0.36" cy="0.32" r="0.75">
+              <stop offset="0" stop-color="#ffe3c7"/>
+              <stop offset="0.55" stop-color="#f4a261"/>
+              <stop offset="1" stop-color="#c2601f"/>
+            </radialGradient>
+          </defs>
+          <path d="M8 40 Q32 54 56 40" fill="none" stroke="var(--accent-guitar)" stroke-width="3.4" stroke-linecap="round"/>
+          <path d="M8 52 H56" fill="none" stroke="var(--accent-drum)" stroke-width="3.4" stroke-linecap="round"/>
+          <path d="M32 2 V16" stroke="var(--accent-replay)" stroke-width="3.4" stroke-linecap="round" opacity="0.5"/>
+          <circle cx="32" cy="29" r="11" fill="url(#logoOrb)"/>
+        </svg>
+        <span class="wordmark">Orbfall</span>
+      </a>
+      <div class="nav-actions">
+        <a class="nav-link hide-sm" href="#features">Features</a>
+        <a class="nav-link hide-sm" href="#space-fx">Space FX</a>
+        <a class="nav-link hide-sm" href="#how">How it works</a>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode">
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        </button>
+        <a class="btn btn-primary btn-sm" href="index.html">Launch</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- ---------- Hero ---------- -->
+    <div class="hero">
+      <canvas id="heroCanvas" aria-hidden="true"></canvas>
+      <div class="hero-fade" aria-hidden="true"></div>
+      <div class="wrap">
+        <div class="hero-inner">
+          <span class="eyebrow">✦ Orbfall · the gravity orb &amp; string sequencer</span>
+          <h1>Drop orbs. Bend gravity. <span class="accent">Hear it play.</span></h1>
+          <p class="lede">
+            Orbfall turns falling orbs into music. They strike six tuned guitar strings and three drum lanes,
+            bounce off angled deflectors you place, and every hit is written onto a live sheet-music staff that you can replay or export as MIDI.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="index.html">
+              Launch the sequencer
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/m-m4h4d/gravity-orb-string-sequencer" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+              View source
+            </a>
+          </div>
+          <div class="meta-row">
+            <span>One self-contained HTML file</span>
+            <span>No install, no build step</span>
+            <span>Web Audio synthesis</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Features ---------- -->
+    <section id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="kicker">Features</p>
+          <h2>Everything it does</h2>
+          <p>Part pinball machine, part step sequencer, part notation app. All of it runs in a single page.</p>
+        </div>
+
+        <div class="grid">
+          <article class="card tone-guitar">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 10h18M3 14h18M3 18h18"/></svg></div>
+            <h3>Six retunable guitar strings</h3>
+            <p>Each string is a lane tuned to a note of the active scale. Orbs pluck them as they cross, and the string visibly vibrates from the point of impact.</p>
+            <ul><li>6 strings</li><li>stereo panned by position</li></ul>
+          </article>
+
+          <article class="card tone-drum">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="7" rx="8" ry="3"/><path d="M4 7v9c0 1.7 3.6 3 8 3s8-1.3 8-3V7"/></svg></div>
+            <h3>Three drum lanes</h3>
+            <p>Below the strings sit a synthesized hi-hat, snare and kick. Rhythm comes from the same physics as the melody.</p>
+            <ul><li>Hi-Hat</li><li>Snare</li><li>Kick</li></ul>
+          </article>
+
+          <article class="card tone-guitar">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="6" r="3"/><path d="M12 11v9M8 16l4 4 4-4"/></svg></div>
+            <h3>2D gravity orbs</h3>
+            <p>Orbs fall with real velocity, leave glowing trails and ricochet up to 18 times before fading. Up to 14 can be in play at once.</p>
+            <ul><li>gravity 180–680</li><li>auto-drop emitter</li></ul>
+          </article>
+
+          <article class="card tone-drum">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 16H3z"/></svg></div>
+            <h3>Angled geometric deflectors</h3>
+            <p>Place bars, triangles and diamonds on any lane to build pinball-style cascades. Click one to rotate it 30°, and right-click or double-click to remove it.</p>
+            <ul><li>bar</li><li>triangle</li><li>diamond</li></ul>
+          </article>
+
+          <article class="card tone-replay">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+            <h3>Three musical scales</h3>
+            <p>Switch the strings between scales on the fly. Every lane retunes immediately and plays an upward preview run of the new scale.</p>
+            <ul><li>Pentatonic</li><li>Dorian</li><li>Major</li></ul>
+          </article>
+
+          <article class="card tone-guitar">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20c4-4 4-12 8-12s4 8 8 4"/></svg></div>
+            <h3>Drag to strum</h3>
+            <p>Sweep your cursor or finger across the strings to strum them by hand and play along with the orbs. Works with mouse, pen and touch.</p>
+          </article>
+
+          <article class="card tone-space">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.6h7.6z"/></svg></div>
+            <h3>✦ Space FX</h3>
+            <p>One toggle sends plucks and percussion through a stereo ping-pong delay and a 2.8-second procedurally generated reverb, so the music gets a wide ambient wash.</p>
+            <ul><li>ping-pong delay</li><li>convolver reverb</li></ul>
+          </article>
+
+          <article class="card tone-replay">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 10h18M3 14h18M3 18h18"/><circle cx="9" cy="12" r="2" fill="currentColor"/><circle cx="16" cy="8" r="2" fill="currentColor"/></svg></div>
+            <h3>Live sheet music transcription</h3>
+            <p>Every hit is written onto a scrolling five-line staff as it happens: guitar notes in pitch position, drums as percussion marks.</p>
+          </article>
+
+          <article class="card tone-replay">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg></div>
+            <h3>Melody replay</h3>
+            <p>Pause the physics and play back exactly what was transcribed, note by note, with each one highlighted on the staff as it sounds.</p>
+          </article>
+
+          <article class="card tone-guitar">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></div>
+            <h3>Binary MIDI export</h3>
+            <p>Download your transcription as a standard <span class="mono">.mid</span> file, built byte by byte in the browser, and open it in any DAW or notation app.</p>
+            <ul><li>125 BPM</li><li>480 PPQ</li><li>GM steel guitar</li><li>drums on ch. 10</li></ul>
+          </article>
+
+          <article class="card tone-drum">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h3l3-8 4 16 3-8h7"/></svg></div>
+            <h3>Real-time synthesis</h3>
+            <p>No samples are loaded. Guitar tones use detuned oscillators with a sub layer and filter envelope, drums come from shaped noise and pitch sweeps, and a master compressor holds the mix together.</p>
+          </article>
+
+          <article class="card tone-space">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+            <h3>One file, zero setup</h3>
+            <p>The whole instrument is a single HTML file using Canvas and the Web Audio API. Open it locally or host it anywhere static.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- Space FX spotlight ---------- -->
+    <section id="space-fx" class="alt">
+      <div class="wrap split">
+        <div>
+          <p class="kicker" style="color: var(--accent-space);">Spotlight</p>
+          <h2>Space FX, under the hood</h2>
+          <p style="color: var(--muted); font-size: 17px;">
+            The <strong>✦ Space FX</strong> toggle in the top HUD opens a wet send bus. Guitar plucks and percussion feed a
+            cross-feedback stereo delay, and both the delay and the direct send flow into a procedurally generated stereo reverb.
+          </p>
+          <ul class="specs">
+            <li><span class="val">270 ms</span><span class="desc">Left delay tap</span></li>
+            <li><span class="val">405 ms</span><span class="desc">Right delay tap, a dotted ratio of the left for ping-pong motion</span></li>
+            <li><span class="val">~2.4 kHz</span><span class="desc">Low-pass damping inside the feedback loop keeps repeats warm</span></li>
+            <li><span class="val">2.8 s</span><span class="desc">Stereo impulse response with early reflections and an exponentially decaying noise tail</span></li>
+          </ul>
+        </div>
+
+        <figure class="signal" aria-label="Space FX signal flow diagram">
+          <svg viewBox="0 0 440 300" role="img" aria-labelledby="sfxTitle">
+            <title id="sfxTitle">Signal flow: sources split into a dry bus and a wet send. The wet send feeds a ping-pong delay and a reverb, which rejoin the dry bus at the master compressor.</title>
+            <defs>
+              <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="arrow" d="M0 0L10 5L0 10z"/></marker>
+              <marker id="arrW" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="arrow wet" d="M0 0L10 5L0 10z"/></marker>
+            </defs>
+
+            <!-- wires -->
+            <path class="wire" d="M120 60 H160" marker-end="url(#arr)"/>
+            <path class="wire" d="M240 60 H318" marker-end="url(#arr)"/>
+            <path class="wire wet" d="M70 82 V150 H118" marker-end="url(#arrW)"/>
+            <path class="wire wet" d="M200 150 H238" marker-end="url(#arrW)"/>
+            <path class="wire wet" d="M160 172 V240 H238" marker-end="url(#arrW)"/>
+            <path class="wire wet" d="M280 172 V218" marker-end="url(#arrW)"/>
+            <path class="wire wet" d="M322 240 H370 V84" marker-end="url(#arrW)"/>
+
+            <g class="node dry">
+              <rect x="20" y="38" width="100" height="44" rx="10"/>
+              <text x="70" y="58" text-anchor="middle">Plucks + Drums</text>
+              <text class="sub" x="70" y="73" text-anchor="middle">sources</text>
+            </g>
+            <g class="node dry">
+              <rect x="160" y="38" width="80" height="44" rx="10"/>
+              <text x="200" y="58" text-anchor="middle">Dry bus</text>
+              <text class="sub" x="200" y="73" text-anchor="middle">gain</text>
+            </g>
+            <g class="node">
+              <rect x="320" y="38" width="100" height="44" rx="10"/>
+              <text x="370" y="58" text-anchor="middle">Compressor</text>
+              <text class="sub" x="370" y="73" text-anchor="middle">→ output</text>
+            </g>
+            <g class="node space">
+              <rect x="120" y="128" width="80" height="44" rx="10"/>
+              <text x="160" y="148" text-anchor="middle">Wet send</text>
+              <text class="sub" x="160" y="163" text-anchor="middle">Space FX</text>
+            </g>
+            <g class="node space">
+              <rect x="240" y="128" width="80" height="44" rx="10"/>
+              <text x="280" y="148" text-anchor="middle">Ping-pong</text>
+              <text class="sub" x="280" y="163" text-anchor="middle">270 / 405 ms</text>
+            </g>
+            <g class="node space">
+              <rect x="240" y="218" width="80" height="44" rx="10"/>
+              <text x="280" y="238" text-anchor="middle">Reverb</text>
+              <text class="sub" x="280" y="253" text-anchor="middle">2.8 s IR</text>
+            </g>
+          </svg>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ---------- How it works ---------- -->
+    <section id="how">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="kicker">How it works</p>
+          <h2>From first click to a MIDI file</h2>
+          <p>No tutorial needed, but here's the loop.</p>
+        </div>
+
+        <div class="steps">
+          <div class="step">
+            <h3>Drop orbs</h3>
+            <p>Click any empty space to drop an orb at your cursor, use <kbd>+ Drop Orb</kbd>, or let <kbd>Auto-Drop</kbd> rain them in.</p>
+          </div>
+          <div class="step">
+            <h3>Shape the path</h3>
+            <p>Click a string or drum lane to place a deflector. Click it again to rotate it, and tune the fall with the <kbd>Gravity</kbd> slider.</p>
+          </div>
+          <div class="step">
+            <h3>Pick a mood</h3>
+            <p>Switch between Pentatonic, Dorian and Major, then flip on <kbd>✦ Space FX</kbd> for delay and reverb.</p>
+          </div>
+          <div class="step">
+            <h3>Keep the take</h3>
+            <p>Watch the staff fill in, press <kbd>▶ Replay Melody</kbd> to hear it back, and <kbd>⬇ Export MIDI</kbd> to keep it.</p>
+          </div>
+        </div>
+
+        <table class="controls">
+          <thead>
+            <tr><th scope="col">Control</th><th scope="col">What it does</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Click empty space</td><td>Drop a gravity orb at the cursor</td></tr>
+            <tr><td>Click a lane</td><td>Place an angled deflector on that string or drum</td></tr>
+            <tr><td>Click a deflector</td><td>Rotate it by 30° and sound its lane</td></tr>
+            <tr><td>Right-click / double-click</td><td>Remove a deflector</td></tr>
+            <tr><td>Drag across strings</td><td>Strum by hand</td></tr>
+            <tr><td>Pause · Clear Orbs · Clear Shapes · Clear Sheet</td><td>Freeze the physics or reset any layer independently</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- Final CTA ---------- -->
+    <section class="final alt">
+      <div class="wrap">
+        <h2>Ready to let it fall?</h2>
+        <p>Turn your sound on and click once to wake the audio engine. The first orbs are already waiting.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="index.html">
+            Launch the sequencer
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Orbfall · Gravity Orb &amp; String Sequencer · built with Canvas and the Web Audio API</span>
+      <span><a href="https://github.com/m-m4h4d/gravity-orb-string-sequencer" target="_blank" rel="noopener">GitHub</a> · <a href="LICENSE">License</a></span>
+    </div>
+  </footer>
+
+  <script>
+    // ---------- Theme toggle ----------
+    (function () {
+      const root = document.documentElement;
+      const btn = document.getElementById('themeToggle');
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+
+      function isDark() {
+        const t = root.getAttribute('data-theme');
+        return t ? t === 'dark' : mq.matches;
+      }
+
+      function sync() {
+        const dark = isDark();
+        root.classList.toggle('is-dark', dark);
+        btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+        btn.setAttribute('aria-pressed', String(dark));
+      }
+
+      btn.addEventListener('click', () => {
+        const next = isDark() ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        try { localStorage.setItem('orbfall-theme', next); } catch (e) {}
+        sync();
+      });
+
+      mq.addEventListener ? mq.addEventListener('change', sync) : mq.addListener(sync);
+      sync();
+    })();
+
+    // ---------- Hero animation: orbs falling through vibrating strings ----------
+    (function () {
+      const canvas = document.getElementById('heroCanvas');
+      const ctx = canvas.getContext('2d');
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let W = 0, H = 0, lanes = [], orbs = [], ripples = [], spawnTimer = 0;
+
+      function cssVar(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      function resize() {
+        const rect = canvas.getBoundingClientRect();
+        W = rect.width;
+        H = rect.height;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const count = 9;
+        const top = H * 0.14;
+        const span = H * 0.74;
+        lanes = Array.from({ length: count }, (_, i) => ({
+          y: top + (span / (count - 1)) * i + (i >= 6 ? 10 : 0),
+          drum: i >= 6,
+          amp: lanes[i] ? lanes[i].amp : 0,
+          phase: 0,
+          hitX: W * 0.6
+        }));
+      }
+
+      function spawn() {
+        const minX = W < 700 ? W * 0.1 : W * 0.5;
+        orbs.push({
+          x: minX + Math.random() * (W - minX - 30),
+          y: -10,
+          vx: (Math.random() - 0.5) * 40,
+          vy: 30 + Math.random() * 40,
+          trail: [],
+          last: {}
+        });
+        if (orbs.length > 12) orbs.shift();
+      }
+
+      function step(dt) {
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+          spawn();
+          spawnTimer = 0.55 + Math.random() * 0.6;
+        }
+
+        orbs.forEach((o) => {
+          const py = o.y;
+          o.vy += 260 * dt;
+          o.x += o.vx * dt;
+          o.y += o.vy * dt;
+          o.trail.push({ x: o.x, y: o.y });
+          if (o.trail.length > 14) o.trail.shift();
+
+          lanes.forEach((l, i) => {
+            if (py < l.y && o.y >= l.y && !o.last[i]) {
+              o.last[i] = true;
+              l.amp = Math.min(9, l.amp + 6);
+              l.hitX = o.x;
+              ripples.push({ x: o.x, y: l.y, r: 2, a: 0.7, drum: l.drum });
+              // Occasionally bounce, like hitting a deflector
+              if (Math.random() < 0.25) {
+                o.vy *= -0.45;
+                o.vx += (Math.random() - 0.5) * 90;
+                o.last = {};
+              }
+            }
+          });
+        });
+        orbs = orbs.filter((o) => o.y < H + 30 && o.x > -30 && o.x < W + 30);
+
+        lanes.forEach((l) => {
+          l.amp *= Math.pow(0.04, dt);
+          l.phase += dt * 38;
+        });
+
+        ripples.forEach((r) => { r.r += 70 * dt; r.a -= 1.3 * dt; });
+        ripples = ripples.filter((r) => r.a > 0);
+      }
+
+      function draw() {
+        const stringCol = cssVar('--string');
+        const guitar = cssVar('--accent-guitar');
+        const drum = cssVar('--accent-drum');
+        const replay = cssVar('--accent-replay');
+
+        ctx.clearRect(0, 0, W, H);
+
+        lanes.forEach((l) => {
+          ctx.beginPath();
+          ctx.lineWidth = l.drum ? 1.6 : 1.2;
+          ctx.strokeStyle = l.amp > 0.4 ? (l.drum ? drum : guitar) : stringCol;
+          ctx.globalAlpha = l.amp > 0.4 ? Math.min(1, 0.35 + l.amp / 10) : 1;
+          for (let x = 0; x <= W; x += 6) {
+            const dist = Math.abs(x - l.hitX);
+            const env = Math.max(0, 1 - dist / (W * 0.45));
+            const y = l.y + Math.sin(l.phase + x * 0.05) * l.amp * env;
+            x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        });
+
+        ripples.forEach((r) => {
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+          ctx.strokeStyle = r.drum ? drum : guitar;
+          ctx.globalAlpha = Math.max(0, r.a);
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        });
+
+        orbs.forEach((o) => {
+          o.trail.forEach((p, i) => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 1 + (i / o.trail.length) * 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = replay;
+            ctx.globalAlpha = (i / o.trail.length) * 0.35;
+            ctx.fill();
+          });
+          ctx.globalAlpha = 1;
+          ctx.beginPath();
+          ctx.arc(o.x, o.y, 6, 0, Math.PI * 2);
+          ctx.fillStyle = guitar;
+          ctx.shadowColor = guitar;
+          ctx.shadowBlur = 14;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        });
+      }
+
+      let last = performance.now();
+      let running = true;
+
+      function frame(now) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (running) {
+          step(dt);
+          draw();
+        }
+        requestAnimationFrame(frame);
+      }
+
+      // Pause the animation when the hero is offscreen
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver((entries) => {
+          running = entries[0].isIntersecting;
+          last = performance.now();
+        }).observe(canvas);
+      }
+
+      window.addEventListener('resize', resize);
+      resize();
+
+      if (reduceMotion) {
+        // Static frame: a few orbs resting mid-fall, strings still
+        for (let i = 0; i < 6; i++) spawn();
+        orbs.forEach((o, i) => { o.y = H * (0.15 + i * 0.13); });
+        draw();
+        window.addEventListener('resize', draw);
+      } else {
+        requestAnimationFrame(frame);
+      }
+    })();
+  </script>
+</body>
+</html>
